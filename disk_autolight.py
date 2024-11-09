@@ -55,23 +55,20 @@ def get_unhealthy_disks():
         unhealthy_disks += [disk_path]
     return unhealthy_disks
 
-
-
-
 def get_disk_info_from_storcli():
-    storcli_output = run_command('storcli /c0/eALL/sALL show all')
-    disks = re.findall(r'/c0/e(\d+)/s(\d+).+?SN = (\S+).+?Model Number = (.+?)(?:\s|$)', storcli_output, re.DOTALL)
+    storcli_output = run_command('storcli /cALL/eALL/sALL show all')
+    disks = re.findall(r'/c(\d+)/e(\d+)/s(\d+).+?SN = (\S+).+?Model Number = ([^\n]*).+?Inquiry Data =', storcli_output, re.DOTALL)
     return disks
 
-def light_up_disk(enclosure_id, slot_id):
-    command = f'storcli /c0/e{enclosure_id}/s{slot_id} start locate'
+def light_up_disk(controller_id, enclosure_id, slot_id):
+    command = f'storcli /c{controller_id}/e{enclosure_id}/s{slot_id} start locate'
     run_command(command)
-    print(f"Started locate LED for enclosure {enclosure_id}, slot {slot_id}")
+    print(f"Set locate LED ON for controller {controller_id} enclosure {enclosure_id}, slot {slot_id}")
 
-def light_off_disk(enclosure_id, slot_id):
-    command = f'storcli /c0/e{enclosure_id}/s{slot_id} stop locate'
+def light_off_disk(controller_id, enclosure_id, slot_id):
+    command = f'storcli /c{controller_id}/e{enclosure_id}/s{slot_id} stop locate'
     run_command(command)
-    print(f"Stopped locate LED for enclosure {enclosure_id}, slot {slot_id}")
+    print(f"Set locate LED OFF for controller {controller_id} enclosure {enclosure_id}, slot {slot_id}")
 
 def main():
     unhealthy_disks = get_unhealthy_disks()
@@ -80,19 +77,16 @@ def main():
         print("Found unhealthy disks:",unhealthy_disks)
     else:
         print("All disk healthy")
-
     for disk in unhealthy_disks:
         serial_number, model_number = get_disk_info_from_smartctl(disk)
         if serial_number and model_number:
             unhealthy_serial_model_pairs.add((serial_number, model_number))
-
     disks_info = get_disk_info_from_storcli()
-
-    for enclosure_id, slot_id, serial_number, model_number in disks_info:
+    for controller_id, enclosure_id, slot_id, serial_number, model_number in disks_info:
         if (serial_number, model_number) in unhealthy_serial_model_pairs:
-            light_up_disk(enclosure_id, slot_id)
+            light_up_disk(controller_id, enclosure_id, slot_id)
         else:
-            light_off_disk(enclosure_id, slot_id)
+            light_off_disk(controller_id, enclosure_id, slot_id)
 
 if __name__ == "__main__":
     main()
