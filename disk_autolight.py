@@ -13,18 +13,14 @@ def run_command(command):
 def get_disk_info_from_smartctl(disk_path):
     smartctl_output = run_command(f'smartctl -i {disk_path}')
     serial_number_match = re.search(r'Serial Number:\s+(\S+)', smartctl_output)
-    model_number_match = re.search(r'(?:Device Model|Product):\s+(.+)', smartctl_output)
-    if serial_number_match and model_number_match:
-        return serial_number_match.group(1), model_number_match.group(1)
-    return None, None
-
-def get_disk_serial(disk_path):
-    if platform.system() == 'Linux':
-        return get_disk_info_from_smartctl(disk_path)[0]
-    elif platform.system() == 'FreeBSD':
-        return run_command(f'diskinfo -s {disk_path}').replace("\n","")
-    else:
-        raise Exception(f"Unsupported platform {platform.system()}")
+    model_number_match = re.search(r'(?:Device Model|Product|Model Number):\s+(.+)', smartctl_output)
+    serial_number=""
+    model_number=""
+    if serial_number_match:
+        serial_number = serial_number_match.group(1)
+    if model_number_match:
+        model_number = model_number_match.group(1)
+    return serial_number, model_number
 
 def get_unhealthy_disks():
     zpool_status_output = run_command('zpool list -PLvH')
@@ -50,7 +46,6 @@ def get_unhealthy_disks():
         disk_path = zpool_status_line[1]
         disk_health = zpool_status_line[10]
         
-
         if platform.system() == 'Linux' and disk_path.startswith("/dev/disk/by-partuuid"):
             # Reverse lookup real disk path
             # But smartctl in linux supports lookup disk info by partid
@@ -71,12 +66,13 @@ def get_unhealthy_disks():
                 #print(f"Remove partid from {disk_path} to {label_name}")
                 disk_path = "/dev/" + label_name
             else:
-                print(f"Not able to remove partid from {disk_path}")
-
+                #print(f"Not able to remove partid from {disk_path}")
+                pass
+            if disk_path.startswith("/dev/nvd"):
+                disk_path = "/dev/nvme" + disk_path[8:]
         if disk_health != "ONLINE":
             unhealthy_disks += [disk_path]
-        print(f"Found disks: {disk_path} SN={get_disk_serial(disk_path)} ,status {disk_health}")
-        
+        print(f"Found disks: {disk_path} SN={get_disk_info_from_smartctl(disk_path)} ,status {disk_health}")
     return unhealthy_disks
 
 def get_disk_info_from_storcli():
